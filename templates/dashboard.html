@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Disease Detection Dashboard</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stats-bar {
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2ecc71;
+        }
+        
+        .disease-antraknosa { color: #e74c3c; }
+        .disease-lalat_buah { color: #3498db; }
+        .disease-cabai_normal { color: #2ecc71; }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .chart-container {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 200px;
+            margin: 0 auto;
+        }
+        
+        .sidebar-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .detections-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .detection-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .detection-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .detection-card.selected {
+            border-color: #2ecc71;
+            background: #f0fff4;
+        }
+        
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .detection-confidence {
+            background: #e8f5e9;
+            color: #2ecc71;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .detection-time {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .detection-location {
+            font-size: 11px;
+            color: #888;
+            font-family: monospace;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        
+        .legend-title {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+        }
+        
+        .no-detections {
+            padding: 40px 20px;
+            text-align: center;
+            color: #999;
+        }
+        
+        .no-detections-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2ecc71;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Custom marker styles */
+        .custom-marker {
+            background-color: #e74c3c;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .marker-antraknosa { background-color: #e74c3c; }
+        .marker-lalat_buah { background-color: #3498db; }
+        .marker-cabai_normal { background-color: #2ecc71; }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: 40%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌿 Plant Disease Detection Dashboard</h1>
+        <div style="font-size: 13px; opacity: 0.9;">Real-time Monitoring</div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat-item">
+            <span class="stat-label">Total Detections</span>
+            <span class="stat-value" id="total-detections">0</span>
+        </div>
+        
+        <div class="stat-item">
+            <span class="stat-label">Antraknosa</span>
+            <span class="stat-value disease-antraknosa" id="antraknosa-count">0</span>
+        </div>
+        
+        <div class="stat-item">
+            <span class="stat-label">Lalat Buah</span>
+            <span class="stat-value disease-lalat_buah" id="lalat_buah-count">0</span>
+        </div>
+        
+        <div class="stat-item">
+            <span class="stat-label">Cabai Normal</span>
+            <span class="stat-value disease-cabai_normal" id="cabai_normal-count">0</span>
+        </div>
+        
+        <div class="stat-item">
+            <span class="stat-label">With GPS</span>
+            <span class="stat-value" id="gps-count">0</span>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="chart-container">
+                <div class="sidebar-header" style="padding: 0 0 15px 0; border: none;">
+                    📊 Detection Distribution
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="detectionChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="sidebar-header">
+                📍 Detection History
+            </div>
+            <div class="detections-list" id="detections-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>Loading detections...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="legend">
+                <div class="legend-title">Disease Types</div>
+                <div class="legend-item">
+                    <div class="legend-color marker-antraknosa"></div>
+                    <span>Antraknosa</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color marker-lalat_buah"></div>
+                    <span>Lalat Buah</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color marker-cabai_normal"></div>
+                    <span>Cabai Normal</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize map (centered on Sri Lanka with higher zoom for smaller area)
+        const map = L.map('map').setView([5.9366, 80.5779], 17);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Store markers
+        const markers = {};
+        let detections = [];
+        let detectionChart = null;
+        let currentLocationMarker = null;
+        let currentLocationCircle = null;
+        
+        // Color mapping for diseases
+        const diseaseColors = {
+            'antraknosa': '#e74c3c',
+            'lalat_buah': '#3498db',
+            'cabai_normal': '#2ecc71'
+        };
+        
+        // Initialize doughnut chart
+        function initChart() {
+            const ctx = document.getElementById('detectionChart').getContext('2d');
+            detectionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Antraknosa', 'Lalat Buah', 'Cabai Normal'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            diseaseColors.antraknosa,
+                            diseaseColors.lalat_buah,
+                            diseaseColors.cabai_normal
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateChart(detections) {
+            const counts = {
+                antraknosa: 0,
+                lalat_buah: 0,
+                cabai_normal: 0
+            };
+            
+            detections.forEach(det => {
+                const className = det.class;
+                if (counts.hasOwnProperty(className)) {
+                    counts[className]++;
+                }
+            });
+            
+            if (detectionChart) {
+                detectionChart.data.datasets[0].data = [
+                    counts.antraknosa,
+                    counts.lalat_buah,
+                    counts.cabai_normal
+                ];
+                detectionChart.update('none'); // Update without animation for real-time feel
+            }
+        }
+        
+        function createMarkerIcon(className) {
+            const color = diseaseColors[className] || '#95a5a6';
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div class="custom-marker marker-${className}"></div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+        
+        function loadDetections() {
+            fetch('/api/detections')
+                .then(response => response.json())
+                .then(data => {
+                    detections = data.detections || [];
+                    updateStats(detections);
+                    updateChart(detections);
+                    displayDetections(detections);
+                    displayMarkers(detections);
+                })
+                .catch(error => {
+                    console.error('Error loading detections:', error);
+                    document.getElementById('detections-list').innerHTML = 
+                        '<div class="no-detections"><div class="no-detections-icon">⚠️</div><div>Error loading detections</div></div>';
+                });
+        }
+        
+        function updateCurrentLocation() {
+            fetch('/api/current-location')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.latitude && data.longitude) {
+                        const latLng = [data.latitude, data.longitude];
+                        
+                        if (!currentLocationMarker) {
+                            // Create current location marker (blue pulsing dot)
+                            const icon = L.divIcon({
+                                className: 'current-location-icon',
+                                html: '<div style="background: #2196F3; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3), 0 2px 6px rgba(0,0,0,0.3); animation: pulse-location 2s infinite;"></div>',
+                                iconSize: [16, 16],
+                                iconAnchor: [8, 8]
+                            });
+                            
+                            currentLocationMarker = L.marker(latLng, { icon: icon }).addTo(map);
+                            currentLocationMarker.bindPopup('<strong>📍 Your Current Location</strong>');
+                            
+                            // Add accuracy circle
+                            currentLocationCircle = L.circle(latLng, {
+                                color: '#2196F3',
+                                fillColor: '#2196F3',
+                                fillOpacity: 0.1,
+                                radius: 20
+                            }).addTo(map);
+                        } else {
+                            currentLocationMarker.setLatLng(latLng);
+                            currentLocationCircle.setLatLng(latLng);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading current location:', error);
+                });
+        }
+        
+        function updateStats(detections) {
+            const stats = {
+                total: detections.length,
+                antraknosa: 0,
+                lalat_buah: 0,
+                cabai_normal: 0,
+                with_gps: 0
+            };
+            
+            detections.forEach(det => {
+                const className = det.class;
+                if (stats.hasOwnProperty(className)) {
+                    stats[className]++;
+                }
+                if (det.location) {
+                    stats.with_gps++;
+                }
+            });
+            
+            document.getElementById('total-detections').textContent = stats.total;
+            document.getElementById('antraknosa-count').textContent = stats.antraknosa;
+            document.getElementById('lalat_buah-count').textContent = stats.lalat_buah;
+            document.getElementById('cabai_normal-count').textContent = stats.cabai_normal;
+            document.getElementById('gps-count').textContent = stats.with_gps;
+        }
+        
+        function displayDetections(detections) {
+            const listContainer = document.getElementById('detections-list');
+            
+            if (detections.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="no-detections">
+                        <div class="no-detections-icon">🔍</div>
+                        <div>No detections with GPS data found</div>
+                        <div style="font-size: 11px; margin-top: 10px; color: #bbb;">
+                            Run inference with --gps flag
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            listContainer.innerHTML = '';
+            
+            // Reverse to show newest first
+            detections.slice().reverse().forEach((det, index) => {
+                const card = document.createElement('div');
+                card.className = 'detection-card';
+                card.dataset.index = detections.length - 1 - index;
+                
+                const confidence = (det.confidence * 100).toFixed(1);
+                const location = det.location;
+                const locationStr = location 
+                    ? `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+                    : 'No GPS data';
+                
+                card.innerHTML = `
+                    <div class="detection-header">
+                        <span class="detection-class disease-${det.class}">${det.class.replace('_', ' ').toUpperCase()}</span>
+                        <span class="detection-confidence">${confidence}%</span>
+                    </div>
+                    <div class="detection-time">⏰ ${det.datetime}</div>
+                    <div class="detection-location">📍 ${locationStr}</div>
+                `;
+                
+                card.addEventListener('click', () => {
+                    // Remove previous selection
+                    document.querySelectorAll('.detection-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    
+                    // Zoom to marker
+                    if (location && markers[det.timestamp]) {
+                        map.setView([location.latitude, location.longitude], 18);
+                        markers[det.timestamp].openPopup();
+                    }
+                });
+                
+                listContainer.appendChild(card);
+            });
+        }
+        
+        function displayMarkers(detections) {
+            // Clear existing markers
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            
+            if (detections.length === 0) return;
+            
+            const bounds = [];
+            
+            detections.forEach(det => {
+                const location = det.location;
+                if (!location) return;
+                
+                const latLng = [location.latitude, location.longitude];
+                bounds.push(latLng);
+                
+                const icon = createMarkerIcon(det.class);
+                const marker = L.marker(latLng, { icon: icon }).addTo(map);
+                
+                const confidence = (det.confidence * 100).toFixed(1);
+                marker.bindPopup(`
+                    <div style="font-family: 'Segoe UI', sans-serif;">
+                        <strong style="font-size: 14px; color: ${diseaseColors[det.class]}">
+                            ${det.class.replace('_', ' ').toUpperCase()}
+                        </strong><br>
+                        <div style="margin-top: 8px; font-size: 12px; line-height: 1.6;">
+                            <strong>Confidence:</strong> ${confidence}%<br>
+                            <strong>Time:</strong> ${det.datetime}<br>
+                            <strong>Location:</strong><br>
+                            ${location.latitude.toFixed(6)}°, ${location.longitude.toFixed(6)}°<br>
+                            <strong>Altitude:</strong> ${location.altitude ? location.altitude.toFixed(1) + ' m' : 'N/A'}<br>
+                            <strong>Satellites:</strong> ${location.satellites || 'N/A'}
+                        </div>
+                    </div>
+                `);
+                
+                markers[det.timestamp] = marker;
+            });
+            
+            // Fit map to show all markers with tighter bounds for smaller area view
+            if (bounds.length > 0) {
+                if (bounds.length === 1) {
+                    // Single detection - zoom in close
+                    map.setView(bounds[0], 19);
+                } else {
+                    // Multiple detections - fit with minimal padding for smaller area
+                    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
+                }
+            }
+        }
+        
+        // Add CSS for pulsing animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse-location {
+                0%, 100% { box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3), 0 2px 6px rgba(0,0,0,0.3); }
+                50% { box-shadow: 0 0 0 8px rgba(33, 150, 243, 0.1), 0 2px 6px rgba(0,0,0,0.3); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Initialize chart on load
+        initChart();
+        
+        // Load detections on page load
+        loadDetections();
+        updateCurrentLocation();
+        
+        // Auto-refresh every 2 seconds for real-time updates
+        setInterval(loadDetections, 2000);
+        setInterval(updateCurrentLocation, 1000); // Update current location every second
+    </script>
+</body>
+</html>

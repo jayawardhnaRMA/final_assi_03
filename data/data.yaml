@@ -1,0 +1,13 @@
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 3
+names: ['antraknosa', 'cabai_normal', 'lalat_buah']
+
+roboflow:
+  workspace: dataset-jwuyd
+  project: chili-disease-qlpmd-nzjht
+  version: 1
+  license: Public Domain
+  url: https://universe.roboflow.com/dataset-jwuyd/chili-disease-qlpmd-nzjht/dataset/1

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Location Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .info-panel {
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-waiting {
+            background: orange;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-active {
+            background: #4caf50;
+        }
+        
+        .status-error {
+            background: #f44336;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        #map {
+            height: calc(100vh - 160px);
+            width: 100%;
+        }
+        
+        .leaflet-popup-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .leaflet-popup-content strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛰️ GPS Location Tracker</h1>
+    </div>
+    
+    <div class="info-panel">
+        <div class="info-item">
+            <span class="info-label">Status</span>
+            <span class="info-value" id="status">
+                <span class="status-indicator status-waiting"></span>
+                <span id="status-text">Waiting for GPS...</span>
+            </span>
+        </div>
+        
+        <div class="info-item">
+            <span class="info-label">Latitude</span>
+            <span class="info-value" id="latitude">--</span>
+        </div>
+        
+        <div class="info-item">
+            <span class="info-label">Longitude</span>
+            <span class="info-value" id="longitude">--</span>
+        </div>
+        
+        <div class="info-item">
+            <span class="info-label">Altitude</span>
+            <span class="info-value" id="altitude">--</span>
+        </div>
+        
+        <div class="info-item">
+            <span class="info-label">Satellites</span>
+            <span class="info-value" id="satellites">0</span>
+        </div>
+        
+        <div class="info-item">
+            <span class="info-label">Last Update</span>
+            <span class="info-value" id="last-update">--</span>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize map (centered on Sri Lanka by default)
+        const map = L.map('map').setView([6.9271, 79.8612], 8);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Marker for current position
+        let marker = null;
+        let circle = null;
+        let hasInitialPosition = false;
+        
+        // Custom icon for GPS marker
+        const gpsIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div style='background-color:#667eea; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);'></div>",
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+        
+        function updateGPS() {
+            fetch('/api/gps')
+                .then(response => response.json())
+                .then(data => {
+                    // Update info panel
+                    document.getElementById('latitude').textContent = 
+                        data.latitude ? data.latitude.toFixed(6) + '°' : '--';
+                    document.getElementById('longitude').textContent = 
+                        data.longitude ? data.longitude.toFixed(6) + '°' : '--';
+                    document.getElementById('altitude').textContent = 
+                        data.altitude ? data.altitude.toFixed(1) + ' m' : '--';
+                    document.getElementById('satellites').textContent = data.satellites || 0;
+                    document.getElementById('last-update').textContent = 
+                        data.last_update || '--';
+                    
+                    // Update status
+                    const statusIndicator = document.querySelector('.status-indicator');
+                    const statusText = document.getElementById('status-text');
+                    
+                    if (data.latitude && data.longitude) {
+                        statusIndicator.className = 'status-indicator status-active';
+                        statusText.textContent = 'GPS Fix Active';
+                        
+                        // Update or create marker
+                        const latLng = [data.latitude, data.longitude];
+                        
+                        if (!marker) {
+                            marker = L.marker(latLng, { icon: gpsIcon }).addTo(map);
+                            circle = L.circle(latLng, {
+                                color: '#667eea',
+                                fillColor: '#667eea',
+                                fillOpacity: 0.1,
+                                radius: 50
+                            }).addTo(map);
+                        } else {
+                            marker.setLatLng(latLng);
+                            circle.setLatLng(latLng);
+                        }
+                        
+                        // Update popup
+                        marker.bindPopup(`
+                            <strong>Current Position</strong><br>
+                            Lat: ${data.latitude.toFixed(6)}°<br>
+                            Lon: ${data.longitude.toFixed(6)}°<br>
+                            Alt: ${data.altitude ? data.altitude.toFixed(1) : 'N/A'} m<br>
+                            Satellites: ${data.satellites}
+                        `);
+                        
+                        // Center map on first position
+                        if (!hasInitialPosition) {
+                            map.setView(latLng, 16);
+                            hasInitialPosition = true;
+                        }
+                    } else {
+                        statusIndicator.className = 'status-indicator status-waiting';
+                        statusText.textContent = 'Waiting for GPS Fix...';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching GPS data:', error);
+                    const statusIndicator = document.querySelector('.status-indicator');
+                    const statusText = document.getElementById('status-text');
+                    statusIndicator.className = 'status-indicator status-error';
+                    statusText.textContent = 'Connection Error';
+                });
+        }
+        
+        // Update GPS data every second
+        updateGPS();
+        setInterval(updateGPS, 1000);
+    </script>
+</body>
+</html>
